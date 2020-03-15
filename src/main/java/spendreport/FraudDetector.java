@@ -39,13 +39,21 @@ public class FraudDetector extends KeyedProcessFunction<Long, Transaction, Alert
 	private static final long ONE_MINUTE = 60 * 1000;
 	
 	private transient ValueState<Boolean> flagState;
+	private transient ValueState<Double> accountAggregate;
 	
 	@Override
 	public void open(Configuration parameters) {
+		// initialize flag ValueState wrapper
 		ValueStateDescriptor<Boolean> flagDescriptor = new ValueStateDescriptor<>(
 				"flag",
 				Types.BOOLEAN);
 		flagState = getRuntimeContext().getState(flagDescriptor);
+		
+		// initialize counter ValueState wrapper
+		ValueStateDescriptor<Double> aggregateDescriptor = new ValueStateDescriptor<Double>(
+				"accountAggregate", 
+				Types.DOUBLE);
+		accountAggregate = getRuntimeContext().getState(aggregateDescriptor);
 	}
 
 	@Override
@@ -53,10 +61,32 @@ public class FraudDetector extends KeyedProcessFunction<Long, Transaction, Alert
 			Transaction transaction,
 			Context context,
 			Collector<Alert> collector) throws Exception {
-
-		Alert alert = new Alert();
-		alert.setId(transaction.getAccountId());
-
-		collector.collect(alert);
+		
+		Boolean lastTransactionWasSmall = flagState.value();
+		
+		if (lastTransactionWasSmall != null) { // since it is a flag, work only with null and not null... no need of true or false... nice.
+			if (transaction.getAmount() > LARGE_AMOUNT) {
+				
+				Alert alert = new Alert();
+				alert.setId(transaction.getAccountId());
+				
+				collector.collect(alert);
+			}
+			
+			flagState.clear();
+		}
+		
+		if (transaction.getAmount() < SMALL_AMOUNT) {
+			flagState.update(true);
+		}
+		
+		if (accountAggregate.value() == null) {
+			accountAggregate.update(new Double(0));
+		}
+		
+		accountAggregate.update(accountAggregate.value() + transaction.getAmount());
+		System.out.println(Thread.currentThread().getName() + ": " + accountAggregate.value());
+		
 	}
+
 }
