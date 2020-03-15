@@ -36,10 +36,11 @@ public class FraudDetector extends KeyedProcessFunction<Long, Transaction, Alert
 
 	private static final double SMALL_AMOUNT = 1.00;
 	private static final double LARGE_AMOUNT = 500.00;
-	private static final long ONE_MINUTE = 60 * 1000;
+	private static final long TEN_SECONDS = 10 * 1000;
 	
 	private transient ValueState<Boolean> flagState;
 	private transient ValueState<Double> accountAggregate;
+	private transient ValueState<Long> timerState;
 	
 	@Override
 	public void open(Configuration parameters) {
@@ -51,9 +52,15 @@ public class FraudDetector extends KeyedProcessFunction<Long, Transaction, Alert
 		
 		// initialize counter ValueState wrapper
 		ValueStateDescriptor<Double> aggregateDescriptor = new ValueStateDescriptor<Double>(
-				"accountAggregate", 
+				"account-aggregate", 
 				Types.DOUBLE);
 		accountAggregate = getRuntimeContext().getState(aggregateDescriptor);
+		
+		// initialize timer ValueState wrapper
+		ValueStateDescriptor<Long> timerDescriptor = new ValueStateDescriptor<>(
+				"timer-state",
+				Types.LONG);
+		timerState = getRuntimeContext().getState(timerDescriptor);
 	}
 
 	@Override
@@ -78,6 +85,10 @@ public class FraudDetector extends KeyedProcessFunction<Long, Transaction, Alert
 		
 		if (transaction.getAmount() < SMALL_AMOUNT) {
 			flagState.update(true);
+			
+			long timer = context.timerService().currentProcessingTime() + TEN_SECONDS;
+			context.timerService().registerProcessingTimeTimer(timer);
+			timerState.update(timer);
 		}
 		
 		if (accountAggregate.value() == null) {
@@ -85,8 +96,19 @@ public class FraudDetector extends KeyedProcessFunction<Long, Transaction, Alert
 		}
 		
 		accountAggregate.update(accountAggregate.value() + transaction.getAmount());
-		System.out.println(Thread.currentThread().getName() + ": " + accountAggregate.value());
+		// TODO: add a Sink to display the aggregates...
+		// System.out.println(Thread.currentThread().getName() + ": " + accountAggregate.value());
 		
+	}
+	
+	/**
+	 * This method overriden method is called after context.timerService().registerProcessingTimeTimer(timer)
+	 * fires the timer.
+	 */
+	@Override
+	public void onTimer(long timestamp, OnTimerContext ctx, Collector<Alert> out) {
+		timerState.clear();
+		flagState.clear();
 	}
 
 }
