@@ -98,7 +98,26 @@ under the License.
 			<artifactId>flink-connector-kafka_2.11</artifactId>
 			<version>1.10.0</version>
 		</dependency>
+		
+		<!-- Mongo Connector -->
+		<dependency>
+	        <groupId>org.mongodb</groupId>
+	        <artifactId>mongodb-driver-sync</artifactId>
+	        <version>3.12.2</version>
+    	</dependency>
+    	
+    	
+		<!-- Mongo Reactive Streams connector -->
+	    <dependency>
+	        <groupId>org.mongodb</groupId>
+	        <artifactId>mongodb-driver-reactivestreams</artifactId>
+	        <version>1.13.1</version>
+	    </dependency>
+	
 	</dependencies>
+	
+    
+
 
 	<build>
 		<plugins>
