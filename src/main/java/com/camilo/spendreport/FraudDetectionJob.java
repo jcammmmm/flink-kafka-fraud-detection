@@ -41,13 +41,11 @@ public class FraudDetectionJob {
 		properties.setProperty("bootstrap.servers", "localhost:9092");
 		// properties.setProperty("group.id", "pokemon");
 		
+		// KafkaStream
 		DataStream<String> streamData = env
 			.addSource(new FlinkKafkaConsumer<>("test", new SimpleStringSchema(), properties));
 		
-		/*
-		streamData.print();
-		*/
-		
+		// Translating the stream to TaxiRide objects
 		DataStream<TaxiRide> taxiRideStream = streamData
 				.map(new MapFunction<String, TaxiRide>() {
 					private static final long serialVersionUID = 1L;
@@ -58,7 +56,14 @@ public class FraudDetectionJob {
 					}
 				});
 		
-		taxiRideStream.print();
+		DataStream<Alert> taxiRideAlerts = taxiRideStream
+				.keyBy(TaxiRide::getLicenseId)
+				.process(new TaxiRideStats())
+				.name("taxi-ride-stats");
+		
+		taxiRideAlerts
+			.addSink(new AlertSink())
+			.name("taxi-ride-alerts");
 		
 		/*
 		DataStream<Transaction> transactions = env
@@ -74,7 +79,7 @@ public class FraudDetectionJob {
 			.addSink(new AlertSink())
 			.name("send-alerts");
 		*/
-
-		env.execute("Fraud Detection");
+		
+		env.execute("Taxi Ride Analytics");
 	}
 }

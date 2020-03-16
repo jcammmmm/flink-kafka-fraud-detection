@@ -18,6 +18,7 @@ package com.camilo.spendreport;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
+import java.util.Objects;
 
 /**
  * POJO representing a taxi ride.
@@ -44,6 +45,10 @@ public class TaxiRide {
 	public float dropOffLat;
 	// total amount paid by the passengers
 	public float total;
+	
+	public String getLicenseId() {
+		return licenseId;
+	}
 	
 	private static transient DateTimeFormatter timeFormatter =
 			DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"); //Z");
@@ -73,7 +78,13 @@ public class TaxiRide {
 
 		return ride;
 	}
-
+	
+	@Override
+	public int hashCode() {
+		return Objects.hash(medallion, licenseId, pickUpTime, dropOffTime);
+	}
+	
+	@Override
 	public String toString() {
 		StringBuilder sb = new StringBuilder();
 		sb.append('[');
