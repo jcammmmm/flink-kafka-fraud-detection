@@ -1,0 +1,9 @@
+zkserver
+
+
+cd C:\ProgramFiles\kafka_2.11-2.4.0\
+bin\windows\kafka-server-start.bat config\server.properties
+bin\windows\kafka-topics.bat --create --bootstrap-server localhost:9092 --replication-factor 1 --partitions 1 --topic test
+bin\windows\kafka-topics.bat --list --bootstrap-server localhost:9092
+bin\windows\kafka-console-producer.bat --broker-list localhost:9092 --topic test < C:\Users\Administrador\Downloads\repo\00_datasets\sorted_data_min.csv
+bin\windows\kafka-console-consumer.bat --bootstrap-server localhost:9092 --topic test --from-beginning

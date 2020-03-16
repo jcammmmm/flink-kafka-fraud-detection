@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-
+package com.camilo.spendreport;
 
 import org.apache.flink.api.common.state.ValueState;
 import org.apache.flink.api.common.state.ValueStateDescriptor;
