@@ -58,7 +58,7 @@ public class FraudDetectionJob {
 		
 		DataStream<Alert> taxiRideAlerts = taxiRideStream
 				.keyBy(TaxiRide::getLicenseId)
-				.process(new TaxiRideStats())
+				.process(new TaxiRideProcessor())
 				.name("taxi-ride-stats");
 		
 		taxiRideAlerts
