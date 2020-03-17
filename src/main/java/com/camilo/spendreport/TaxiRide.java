@@ -67,11 +67,11 @@ public class TaxiRide {
 			ride.licenseId = tokens[1];
 			ride.pickUpTime = LocalDateTime.parse(tokens[2], timeFormatter).toEpochSecond(ZoneOffset.UTC);
 			ride.dropOffTime = LocalDateTime.parse(tokens[3], timeFormatter).toEpochSecond(ZoneOffset.UTC);
-			ride.pickUpLon = tokens[4].length() > 0 ? Float.parseFloat(tokens[4]) : 0.0f;
-			ride.pickUpLat = tokens[5].length() > 0 ? Float.parseFloat(tokens[5]) : 0.0f;
-			ride.dropOffLon = tokens[6].length() > 0 ? Float.parseFloat(tokens[6]) : 0.0f;
-			ride.dropOffLat = tokens[7].length() > 0 ? Float.parseFloat(tokens[7]) : 0.0f;
-			ride.total = tokens[8].length() > 0 ? Float.parseFloat(tokens[8]) : 0.0f;
+			ride.pickUpLon = tokens[6].length() > 0 ? Float.parseFloat(tokens[6]) : 0.0f;
+			ride.pickUpLat = tokens[7].length() > 0 ? Float.parseFloat(tokens[7]) : 0.0f;
+			ride.dropOffLon = tokens[8].length() > 0 ? Float.parseFloat(tokens[8]) : 0.0f;
+			ride.dropOffLat = tokens[9].length() > 0 ? Float.parseFloat(tokens[9]) : 0.0f;
+			ride.total = tokens[11].length() > 0 ? Float.parseFloat(tokens[11]) : 0.0f;
 		} catch (NumberFormatException nfe) {
 			throw new RuntimeException("Invalid field: " + line, nfe);
 		}

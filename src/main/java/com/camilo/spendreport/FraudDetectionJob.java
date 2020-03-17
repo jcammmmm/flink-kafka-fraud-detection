@@ -20,11 +20,17 @@ package com.camilo.spendreport;
 
 import java.util.Properties;
 
+import org.apache.flink.api.common.functions.FilterFunction;
 import org.apache.flink.api.common.functions.MapFunction;
+import org.apache.flink.api.common.functions.ReduceFunction;
+import org.apache.flink.api.common.serialization.SimpleStringSchema;
+import org.apache.flink.streaming.api.TimeCharacteristic;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
+import org.apache.flink.streaming.api.windowing.assigners.TumblingEventTimeWindows;
+import org.apache.flink.streaming.api.windowing.assigners.TumblingProcessingTimeWindows;
+import org.apache.flink.streaming.api.windowing.time.Time;
 import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer;
-import org.apache.flink.streaming.util.serialization.SimpleStringSchema;
 import org.apache.flink.walkthrough.common.entity.Alert;
 import org.apache.flink.walkthrough.common.entity.Transaction;
 import org.apache.flink.walkthrough.common.sink.AlertSink;
@@ -34,8 +40,10 @@ import org.apache.flink.walkthrough.common.source.TransactionSource;
  * Skeleton code for the datastream walkthrough
  */
 public class FraudDetectionJob {
+	
 	public static void main(String[] args) throws Exception {
 		StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+		env.setStreamTimeCharacteristic(TimeCharacteristic.ProcessingTime);
 		
 		Properties properties = new Properties();
 		properties.setProperty("bootstrap.servers", "localhost:9092");
@@ -56,14 +64,50 @@ public class FraudDetectionJob {
 					}
 				});
 		
-		DataStream<Alert> taxiRideAlerts = taxiRideStream
+		// Applying window streaming
+		DataStream<TaxiRide> reducedStream = taxiRideStream
 				.keyBy(TaxiRide::getLicenseId)
+//				.keyBy("total")
+//				.window(TumblingProcessingTimeWindows.of(Time.milliseconds(1000)))
+				.reduce(
+					new ReduceFunction<TaxiRide>() {
+
+						private static final long serialVersionUID = 2179158058383632366L;
+
+						@Override
+						public TaxiRide reduce(TaxiRide tr1, TaxiRide tr2) throws Exception {
+							tr1.total += tr2.total;
+							return tr1;
+						}
+						
+					}
+				);
+				
+		DataStream<TaxiRide> filteredStream = reducedStream
+				
+				.filter(new FilterFunction<TaxiRide>() {
+
+					private static final long serialVersionUID = -3802700265716996691L;
+
+					@Override
+					public boolean filter(TaxiRide value) throws Exception {
+						if (value.licenseId.equals("E7750A37CAB07D0DFF0AF7E3573AC141"))
+							return true;
+						else
+							return false;
+					}
+
+
+				});
+			
+		filteredStream.print();
+				
+				
+				/*
 				.process(new TaxiRideProcessor())
 				.name("taxi-ride-stats");
+				*/
 		
-		taxiRideAlerts
-			.addSink(new AlertSink())
-			.name("taxi-ride-alerts");
 		
 		/*
 		DataStream<Transaction> transactions = env
@@ -80,6 +124,10 @@ public class FraudDetectionJob {
 			.name("send-alerts");
 		*/
 		
+		
+		
+		
 		env.execute("Taxi Ride Analytics");
+		
 	}
 }
