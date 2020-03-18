@@ -18,6 +18,7 @@
 
 package com.camilo.spendreport;
 
+import java.io.IOException;
 import java.util.Properties;
 
 import org.apache.flink.api.common.functions.AggregateFunction;
@@ -25,17 +26,29 @@ import org.apache.flink.api.common.functions.FilterFunction;
 import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.api.common.functions.ReduceFunction;
 import org.apache.flink.api.common.serialization.SimpleStringSchema;
+import org.apache.flink.api.common.state.ValueState;
+import org.apache.flink.api.common.state.ValueStateDescriptor;
+import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.TimeCharacteristic;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
+import org.apache.flink.streaming.api.functions.KeyedProcessFunction;
+import org.apache.flink.streaming.api.windowing.assigners.GlobalWindows;
 import org.apache.flink.streaming.api.windowing.assigners.TumblingEventTimeWindows;
 import org.apache.flink.streaming.api.windowing.assigners.TumblingProcessingTimeWindows;
 import org.apache.flink.streaming.api.windowing.time.Time;
+import org.apache.flink.streaming.api.windowing.triggers.Trigger;
+import org.apache.flink.streaming.api.windowing.triggers.TriggerResult;
+import org.apache.flink.streaming.api.windowing.windows.GlobalWindow;
+import org.apache.flink.streaming.api.windowing.windows.Window;
 import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer;
+import org.apache.flink.util.Collector;
 import org.apache.flink.walkthrough.common.entity.Alert;
 import org.apache.flink.walkthrough.common.entity.Transaction;
 import org.apache.flink.walkthrough.common.sink.AlertSink;
 import org.apache.flink.walkthrough.common.source.TransactionSource;
+
+import akka.remote.RemoteWatcher.Stats;
 
 /**
  * Skeleton code for the datastream walkthrough
@@ -59,13 +72,15 @@ import org.apache.flink.walkthrough.common.source.TransactionSource;
  */
 public class FraudDetectionJob {
 	
+	private static int WINDOW_SIZE_IN_MILLIS = 1000;
+	private static int TIMER_TO_EMIT_STATS = 5000;
+	
 	public static void main(String[] args) throws Exception {
 		StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
 		env.setStreamTimeCharacteristic(TimeCharacteristic.ProcessingTime); // Processing time refers to the system time of the machine that is executing the respective operation.
 		
 		Properties properties = new Properties();
 		properties.setProperty("bootstrap.servers", "localhost:9092");
-		// properties.setProperty("group.id", "pokemon");
 		
 		// KafkaStream
 		DataStream<String> streamData = env
@@ -83,10 +98,21 @@ public class FraudDetectionJob {
 				});
 		
 		/*
-		// Applying window streaming
+		// FAIL
+		// with global window aggregation
+		DataStream<TaxiRideStats> taxiRideStatsStream = taxiRideStream
+				.keyBy(TaxiRide::getLicenseId)
+				.window(GlobalWindows.create())
+				.trigger(new ReportStatsTrigger<GlobalWindow>())
+				.aggregate(new AverageIncomeRide());
+				
+		taxiRideStatsStream.print();
+		*/
+		/**
+		// WORKS
+		// Applying window streaming 
 		DataStream<TaxiRide> reducedStream = taxiRideStream
 				.keyBy(TaxiRide::getLicenseId)
-				.window(TumblingProcessingTimeWindows.of(Time.milliseconds(1000)))
 				.reduce(
 					new ReduceFunction<TaxiRide>() {
 
@@ -100,17 +126,21 @@ public class FraudDetectionJob {
 						
 					}
 				);
-				
+		reducedStream.print();
 		*/
-		
-		DataStream<TaxiRideStats> taxiRideStatsStream = taxiRideStream
-				.keyBy(TaxiRide::getLicenseId)
-				.window(TumblingProcessingTimeWindows.of(Time.milliseconds(1000)))
-				.aggregate(new AverageIncomeRide());
-		
-		taxiRideStatsStream.print();
-		
 		/*
+		// FAIL
+		// A stream that emits values at time intervals
+		DataStream<TaxiRideStats> emmitingStatsStream = taxiRideStream 
+				.keyBy(TaxiRide::getLicenseId)
+				.process(new CountWithTimeoutFunction());
+		
+		emmitingStatsStream.print();
+		*/
+
+		/**
+		// WORKS
+		// filters the stream by license id
 		DataStream<TaxiRide> filteredStream = reducedStream
 				
 				.filter(new FilterFunction<TaxiRide>() {
@@ -135,12 +165,15 @@ public class FraudDetectionJob {
 				
 				
 		/*
+		// WORKS
 		.process(new TaxiRideProcessor())
 		.name("taxi-ride-stats");
 		*/
 		
 		
-		/*
+		/**
+		// WORKS
+		// base example
 		DataStream<Transaction> transactions = env
 			.addSource(new TransactionSource())
 			.name("transactions");
@@ -156,6 +189,88 @@ public class FraudDetectionJob {
 		*/
 		
 		env.execute("Taxi Ride Analytics");
+		
+	}
+	
+	private static class ReportStatsTrigger<W extends Window> extends Trigger<TaxiRide, W> {
+		@Override
+		public TriggerResult onElement(TaxiRide element, long timestamp, W window, TriggerContext ctx)
+				throws Exception {
+			return TriggerResult.CONTINUE;
+		}
+
+		@Override
+		public TriggerResult onProcessingTime(long time, W window, TriggerContext ctx) throws Exception {
+			ctx.registerEventTimeTimer(time + 5000);
+			return TriggerResult.FIRE;
+		}
+
+		@Override
+		public TriggerResult onEventTime(long time, W window, TriggerContext ctx) throws Exception {
+			return TriggerResult.CONTINUE;
+		}
+
+		@Override
+		public void clear(W window, TriggerContext ctx) throws Exception {
+			
+		}
+		
+	}
+	
+	
+	/**
+	 * If you are executing this processor with EventTime characteristic
+	 * your timestamp will be null, and this execution will let you with a 
+	 * NullPointerException.
+	 */
+	private static class CountWithTimeoutFunction extends KeyedProcessFunction<String, TaxiRide, TaxiRideStats> {
+
+		private static final long serialVersionUID = -7001031574182421923L;
+		private ValueState<TaxiRideStats> state;
+		
+		@Override
+		public void open(Configuration params) {
+			state = getRuntimeContext().getState(new ValueStateDescriptor<>("myState", TaxiRideStats.class));
+		}
+		
+		@Override
+		public void processElement(TaxiRide ride, 
+									KeyedProcessFunction<String, TaxiRide, TaxiRideStats>.Context ctx,
+									Collector<TaxiRideStats> out) throws Exception {
+								
+			TaxiRideStats stats = state.value();
+			if (stats == null) {
+				stats = new TaxiRideStats();
+				stats.setDriverId(ride.licenseId);
+			}
+			
+			stats.countOne();
+			stats.updateTotalAggregate(ride.total);
+			
+
+			/**
+			 * If you are executing this processor with EventTime characteristic
+			 * your timestamp will be null, and this execution will let you with a 
+			 * NullPointerException.
+			 */
+			stats.setLastModified(ctx.timestamp());
+			
+			state.update(stats);
+			
+			ctx.timerService().registerEventTimeTimer(stats.getLastModified() + TIMER_TO_EMIT_STATS);
+		}
+		
+		@Override
+		public void onTimer(long timestamp, OnTimerContext ctx, Collector<TaxiRideStats> out) throws Exception {
+			
+			TaxiRideStats result = state.value();
+			
+			//if (timestamp == result.getLastModified() + TIMER_TO_EMIT_STATS) {
+				out.collect(new TaxiRideStats(result.getDriverId(), result.getTotalAggregate(), result.getCounter(), result.getLastModified())); // see if its possible to pass result variable directly...  
+//			}
+				
+		}
+	
 		
 	}
 
@@ -175,7 +290,8 @@ public class FraudDetectionJob {
 				accumulator.setDriverId(ride.licenseId);
 
 			accumulator.updateTotalAggregate(ride.total);
-				
+			accumulator.countOne();	
+			
 			return accumulator;
 		}
 
@@ -187,6 +303,7 @@ public class FraudDetectionJob {
 		@Override
 		public TaxiRideStats merge(TaxiRideStats a, TaxiRideStats b) {
 			a.setTotalAggregate(a.getTotalAggregate() + b.getTotalAggregate());
+			a.setCounter(a.getCounter() + b.getCounter());
 			return a;
 		}
 	}
