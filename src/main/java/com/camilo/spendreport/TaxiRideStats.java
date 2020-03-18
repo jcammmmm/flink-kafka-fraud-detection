@@ -22,17 +22,20 @@ public class TaxiRideStats {
 		this.driverId = driverId;
 	}
 
-	public Double getTotalAggreage() {
+	public Double getTotalAggregate() {
 		return totalAggregate;
 	}
 
-	public void setTotalAggreage(Double totalAggreage) {
-		this.totalAggregate = totalAggreage;
+	public void setTotalAggregate(Double totalAggregate) {
+		this.totalAggregate = totalAggregate;
+	}
+	
+	public void updateTotalAggregate(Double value) {
+		this.totalAggregate += value;
 	}
 
 	@Override
 	public String toString() {
-		return "TaxiRideStats [driverId=" + driverId + ", totalAggreage=" + totalAggregate + "]";
+		return "TaxiRideStats [driverId=" + driverId + ", totalAggregate=" + totalAggregate + "]";
 	}
-	
 }

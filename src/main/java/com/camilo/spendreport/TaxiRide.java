@@ -36,15 +36,15 @@ public class TaxiRide {
 	// time when passengers were dropped off
 	public long dropOffTime;
 	// longitude where passengers were picked up
-	public float pickUpLon;
+	public double pickUpLon;
 	// latitude where passengers were picked up
-	public float pickUpLat;
+	public double pickUpLat;
 	// longitude where passengers were dropped off
-	public float dropOffLon;
+	public double dropOffLon;
 	// latitude where passengers were dropped off
-	public float dropOffLat;
+	public double dropOffLat;
 	// total amount paid by the passengers
-	public float total;
+	public double total;
 	
 	public String getLicenseId() {
 		return licenseId;
